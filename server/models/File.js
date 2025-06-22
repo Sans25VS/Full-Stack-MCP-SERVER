@@ -1,8 +1,9 @@
 const fs = require('fs').promises;
 const path = require('path');
 const config = require('../config/database');
+const GoogleCloudStorage = require('../services/googleCloudStorage');
 
-// In-memory file storage for Vercel deployment
+// In-memory file storage for fallback (not used with GCS)
 const fileStorage = new Map();
 
 class File {
@@ -12,20 +13,19 @@ class File {
 
   async getAllFiles() {
     try {
-      // For Vercel deployment, use in-memory storage
-      if (process.env.NODE_ENV === 'production') {
-        const files = Array.from(fileStorage.keys()).map(filename => {
-          const fileData = fileStorage.get(filename);
-          return {
-            name: filename,
-            path: `/uploads/${filename}`,
-            isDirectory: false,
-            size: fileData.size,
-            birthtime: fileData.birthtime,
-            mtime: fileData.mtime
-          };
-        });
-        return files;
+      // For production, use Google Cloud Storage
+      if (process.env.NODE_ENV === 'production' && process.env.GOOGLE_CLOUD_BUCKET_NAME) {
+        const files = await GoogleCloudStorage.listFiles();
+        return files.map(file => ({
+          name: file.name,
+          fileName: file.fileName, // GCS filename
+          path: file.url,
+          isDirectory: false,
+          size: file.size,
+          birthtime: new Date(file.uploadedAt),
+          mtime: new Date(file.uploadedAt),
+          url: file.url
+        }));
       }
 
       // For local development, use filesystem
@@ -36,6 +36,7 @@ class File {
           const stats = await fs.stat(filePath);
           return {
             name: file,
+            fileName: file,
             path: filePath,
             isDirectory: stats.isDirectory(),
             size: stats.size,
@@ -52,13 +53,15 @@ class File {
 
   async getFileContent(filename) {
     try {
-      // For Vercel deployment, use in-memory storage
-      if (process.env.NODE_ENV === 'production') {
-        const fileData = fileStorage.get(filename);
-        if (!fileData) {
+      // For production, use Google Cloud Storage
+      if (process.env.NODE_ENV === 'production' && process.env.GOOGLE_CLOUD_BUCKET_NAME) {
+        // Find the GCS filename by original name
+        const files = await GoogleCloudStorage.listFiles();
+        const file = files.find(f => f.name === filename);
+        if (!file) {
           throw new Error('File not found');
         }
-        return fileData.content;
+        return await GoogleCloudStorage.getFileContent(file.fileName);
       }
 
       // For local development, use filesystem
@@ -72,14 +75,9 @@ class File {
 
   async createFile(filename, content = '') {
     try {
-      // For Vercel deployment, use in-memory storage
-      if (process.env.NODE_ENV === 'production') {
-        fileStorage.set(filename, {
-          content,
-          size: Buffer.byteLength(content, 'utf8'),
-          birthtime: new Date(),
-          mtime: new Date()
-        });
+      // For production, use Google Cloud Storage
+      if (process.env.NODE_ENV === 'production' && process.env.GOOGLE_CLOUD_BUCKET_NAME) {
+        await GoogleCloudStorage.createFile(filename, content);
         return { message: `File ${filename} created.` };
       }
 
@@ -94,18 +92,15 @@ class File {
 
   async updateFile(filename, content) {
     try {
-      // For Vercel deployment, use in-memory storage
-      if (process.env.NODE_ENV === 'production') {
-        const existingFile = fileStorage.get(filename);
-        if (!existingFile) {
+      // For production, use Google Cloud Storage
+      if (process.env.NODE_ENV === 'production' && process.env.GOOGLE_CLOUD_BUCKET_NAME) {
+        // Find the GCS filename by original name
+        const files = await GoogleCloudStorage.listFiles();
+        const file = files.find(f => f.name === filename);
+        if (!file) {
           throw new Error('File not found');
         }
-        fileStorage.set(filename, {
-          content,
-          size: Buffer.byteLength(content, 'utf8'),
-          birthtime: existingFile.birthtime,
-          mtime: new Date()
-        });
+        await GoogleCloudStorage.updateFile(file.fileName, content);
         return { message: `File ${filename} edited.` };
       }
 
@@ -120,12 +115,15 @@ class File {
 
   async deleteFile(filename) {
     try {
-      // For Vercel deployment, use in-memory storage
-      if (process.env.NODE_ENV === 'production') {
-        const deleted = fileStorage.delete(filename);
-        if (!deleted) {
+      // For production, use Google Cloud Storage
+      if (process.env.NODE_ENV === 'production' && process.env.GOOGLE_CLOUD_BUCKET_NAME) {
+        // Find the GCS filename by original name
+        const files = await GoogleCloudStorage.listFiles();
+        const file = files.find(f => f.name === filename);
+        if (!file) {
           throw new Error('File not found');
         }
+        await GoogleCloudStorage.deleteFile(file.fileName);
         return { message: `File ${filename} deleted.` };
       }
 
@@ -140,9 +138,10 @@ class File {
 
   async getFileStructure() {
     try {
-      // For Vercel deployment, use in-memory storage
-      if (process.env.NODE_ENV === 'production') {
-        return Array.from(fileStorage.keys());
+      // For production, use Google Cloud Storage
+      if (process.env.NODE_ENV === 'production' && process.env.GOOGLE_CLOUD_BUCKET_NAME) {
+        const files = await GoogleCloudStorage.listFiles();
+        return files.map(f => f.name);
       }
 
       // For local development, use filesystem
@@ -156,17 +155,15 @@ class File {
   // Method to add files from upload
   async addUploadedFile(filename, buffer, mimetype) {
     try {
-      const content = buffer.toString('utf8');
-      const now = new Date();
-      
-      fileStorage.set(filename, {
-        content,
-        size: buffer.length,
-        mimetype,
-        birthtime: now,
-        mtime: now
-      });
-      
+      // For production, use Google Cloud Storage
+      if (process.env.NODE_ENV === 'production' && process.env.GOOGLE_CLOUD_BUCKET_NAME) {
+        const result = await GoogleCloudStorage.uploadFile(buffer, filename, mimetype);
+        return { message: `File ${filename} uploaded successfully.`, fileInfo: result };
+      }
+
+      // For local development, use filesystem
+      const filePath = path.join(this.uploadsDir, filename);
+      await fs.writeFile(filePath, buffer);
       return { message: `File ${filename} uploaded successfully.` };
     } catch (error) {
       throw new Error(`Unable to add uploaded file: ${error.message}`);

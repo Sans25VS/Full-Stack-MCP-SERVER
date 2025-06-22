@@ -16,12 +16,16 @@ class FileController {
       for (const file of req.files) {
         try {
           // Use the File model to handle the upload
-          await FileModel.addUploadedFile(file.originalname, file.buffer, file.mimetype);
+          const result = await FileModel.addUploadedFile(file.originalname, file.buffer, file.mimetype);
           
           uploadedFiles.push({
             name: file.originalname,
             size: file.size,
-            mimetype: file.mimetype
+            mimetype: file.mimetype,
+            ...(result.fileInfo && { 
+              fileName: result.fileInfo.fileName,
+              url: result.fileInfo.url 
+            })
           });
           
           console.log(`File uploaded: ${file.originalname}`);
