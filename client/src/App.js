@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
+import API_BASE_URL from './config';
 
 function App() {
   const [files, setFiles] = useState([]);
@@ -21,7 +22,7 @@ function App() {
   const fetchFiles = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:3001/files');
+      const response = await fetch(`${API_BASE_URL}/files`);
       const data = await response.json();
       setFiles(data);
     } catch (error) {
@@ -44,7 +45,7 @@ function App() {
 
     setLoading(true);
     try {
-      await fetch('http://localhost:3001/upload', {
+      await fetch(`${API_BASE_URL}/upload`, {
         method: 'POST',
         body: formData,
       });
@@ -65,7 +66,7 @@ function App() {
     setSelectedFile(file);
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:3001/files/${file.name}`);
+      const response = await fetch(`${API_BASE_URL}/files/${file.name}`);
       const data = await response.text();
       setFileContent(data);
     } catch (error) {
@@ -87,7 +88,7 @@ function App() {
     setSuccess('');
     
     try {
-      const response = await fetch('http://localhost:3001/command', {
+      const response = await fetch(`${API_BASE_URL}/command`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -126,7 +127,7 @@ function App() {
     setError('');
     setSuccess('');
     try {
-      const response = await fetch('http://localhost:3001/command', {
+      const response = await fetch(`${API_BASE_URL}/command`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
