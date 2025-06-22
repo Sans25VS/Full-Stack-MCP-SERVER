@@ -48,8 +48,8 @@ Each directory has its own `package.json` and dependencies.
 ### 1. Clone the repository
 
 ```bash
-git clone <your-repository-url>
-cd <repository-directory>
+gh repo clone Sans25VS/Full-Stack-MCP-SERVER
+cd Full-Stack-MCP-SERVER
 ```
 
 ### 2. Setup the Backend (`/server`)
