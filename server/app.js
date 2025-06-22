@@ -22,6 +22,21 @@ app.use((req, res, next) => {
   next();
 });
 
+// Root route
+app.get('/', (req, res) => {
+  res.status(200).json({
+    message: 'File Management API Server',
+    version: '1.0.0',
+    endpoints: {
+      upload: 'POST /upload',
+      files: 'GET /files',
+      read: 'GET /files/:filename',
+      delete: 'DELETE /files/:filename',
+      command: 'POST /command'
+    }
+  });
+});
+
 // Routes
 app.use('/', fileRoutes);
 
@@ -45,4 +60,5 @@ app.use('*', (req, res) => {
 // Error handling middleware (must be last)
 app.use(errorHandler);
 
+// Export for Vercel
 module.exports = app; 
