@@ -6,6 +6,7 @@ function App() {
   const [files, setFiles] = useState([]);
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
@@ -20,7 +21,7 @@ function App() {
   };
 
   const fetchFiles = async () => {
-    setLoading(true);
+    setRefreshing(true);
     try {
       const response = await fetch(`${API_BASE_URL}/files`);
       const data = await response.json();
@@ -29,7 +30,7 @@ function App() {
       console.error('Error fetching files:', error);
       setError('Error fetching files.');
     }
-    setLoading(false);
+    setRefreshing(false);
   };
 
   useEffect(() => {
@@ -44,15 +45,25 @@ function App() {
     }
 
     setLoading(true);
+    setError('');
+    setSuccess('');
     try {
-      await fetch(`${API_BASE_URL}/upload`, {
+      const response = await fetch(`${API_BASE_URL}/upload`, {
         method: 'POST',
         body: formData,
       });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Upload failed');
+      }
+      
+      const result = await response.json();
+      setSuccess(result.message);
       fetchFiles();
     } catch (error) {
       console.error('Error uploading files:', error);
-      setError('Error uploading files.');
+      setError(error.message);
     }
     setLoading(false);
   };
@@ -77,7 +88,7 @@ function App() {
   };
 
   const handleDeleteFile = async (filename, e) => {
-    e.stopPropagation(); // Prevent file selection when clicking delete
+    e.stopPropagation();
     
     if (!window.confirm(`Are you sure you want to delete "${filename}"?`)) {
       return;
@@ -104,7 +115,6 @@ function App() {
       const successData = await response.json();
       setSuccess(successData.message);
       
-      // Clear selected file if it was the deleted one
       if (selectedFile && selectedFile.name === filename) {
         setSelectedFile(null);
         setFileContent('');
@@ -119,8 +129,8 @@ function App() {
   };
 
   const handleCommand = async () => {
-    if (!prompt) {
-      alert('Please enter a command.');
+    if (!prompt.trim()) {
+      setError('Please enter a command.');
       return;
     }
     setLoading(true);
@@ -132,7 +142,7 @@ function App() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({ prompt: prompt.trim() }),
       });
       if (!response.ok) {
         const errorData = await response.json();
@@ -154,41 +164,96 @@ function App() {
     setFileContent('');
   };
 
+  const clearMessages = () => {
+    setError('');
+    setSuccess('');
+  };
+
   return (
     <div className="App">
       <header className="App-header">
-        <h1>Natural Language File System</h1>
-      </header>
-      {loading && <div className="loader"></div>}
-      {error && <div className="error-message">{error}</div>}
-      {success && <div className="success-message">{success}</div>}
-      <main>
-        <div className="upload-section">
-          <h2>Upload Folder</h2>
-          <input type="file" webkitdirectory="" directory="" multiple onChange={handleUpload} />
+        <div className="header-content">
+          <h1>📁 File Change</h1>
+          <p>Natural Language File Management with MCP Server</p>
         </div>
-        <div className="files-section">
-          <h2>Files</h2>
-          {files.length > 0 ? (
-            <ul>
-              {files.map((file, index) => (
-                <li
-                  key={index}
-                  onClick={() => handleFileClick(file)}
-                  className={selectedFile && selectedFile.name === file.name ? 'selected' : ''}
-                >
-                  <span className="file-name">
-                    {file.isDirectory ? (
-                      <svg className="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#ffca28"><path d="M10 4H4c-1.11 0-2 .89-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
-                    ) : (
-                      <svg className="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#90a4ae"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zM6 20V4h7v5h5v11H6z"/></svg>
-                    )}
-                    {file.name}
-                  </span>
-                  <div className="file-actions">
-                    <span className="file-info">
-                      {file.isDirectory ? 'Folder' : `${formatFileSize(file.size)} - ${new Date(file.mtime).toLocaleString()}`}
-                    </span>
+      </header>
+
+      {loading && (
+        <div className="loading-overlay">
+          <div className="loader"></div>
+          <p>Processing...</p>
+        </div>
+      )}
+
+      {(error || success) && (
+        <div className="message-container">
+          {error && (
+            <div className="error-message" onClick={clearMessages}>
+              <span>❌ {error}</span>
+              <button className="close-btn">×</button>
+            </div>
+          )}
+          {success && (
+            <div className="success-message" onClick={clearMessages}>
+              <span>✅ {success}</span>
+              <button className="close-btn">×</button>
+            </div>
+          )}
+        </div>
+      )}
+
+      <main className="main-content">
+        <div className="top-row">
+          <div className="upload-section">
+            <h2>📤 Upload Files</h2>
+            <div className="upload-area">
+              <input 
+                type="file" 
+                webkitdirectory="" 
+                directory="" 
+                multiple 
+                onChange={handleUpload}
+                id="file-upload"
+                className="file-input"
+              />
+              <label htmlFor="file-upload" className="upload-label">
+                <span>📁 Choose Folder or Files</span>
+                <small>Click to select files or folders to upload</small>
+              </label>
+            </div>
+          </div>
+
+          <div className="files-section">
+            <div className="section-header">
+              <h2>📋 Files ({files.length})</h2>
+              <button 
+                onClick={fetchFiles} 
+                className={`refresh-btn ${refreshing ? 'refreshing' : ''}`}
+                disabled={loading || refreshing}
+                title="Refresh files"
+                aria-label="Refresh file list"
+              >
+                🔄
+              </button>
+            </div>
+            
+            {files.length > 0 ? (
+              <div className="files-grid">
+                {files.map((file, index) => (
+                  <div
+                    key={index}
+                    onClick={() => handleFileClick(file)}
+                    className={`file-card ${selectedFile && selectedFile.name === file.name ? 'selected' : ''}`}
+                  >
+                    <div className="file-icon">
+                      {file.isDirectory ? '📁' : '📄'}
+                    </div>
+                    <div className="file-info">
+                      <h3 className="file-name">{file.name}</h3>
+                      <p className="file-details">
+                        {file.isDirectory ? 'Folder' : `${formatFileSize(file.size)} • ${new Date(file.mtime).toLocaleDateString()}`}
+                      </p>
+                    </div>
                     {!file.isDirectory && (
                       <button 
                         onClick={(e) => handleDeleteFile(file.name, e)}
@@ -199,43 +264,70 @@ function App() {
                       </button>
                     )}
                   </div>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p>No files uploaded yet.</p>
-          )}
+                ))}
+              </div>
+            ) : (
+              <div className="empty-state">
+                <p>📂 No files uploaded yet</p>
+                <p>Upload some files to get started!</p>
+              </div>
+            )}
+          </div>
         </div>
+
         {selectedFile && (
           <div className="file-content-section">
-            <div className="file-content-header">
-              <h2>{selectedFile.name}</h2>
-              <div className="file-content-actions">
-                <button onClick={clearSelectedFile} className="close-btn">Close</button>
+            <div className="content-header">
+              <h2>📄 {selectedFile.name}</h2>
+              <div className="content-actions">
+                <button onClick={clearSelectedFile} className="close-btn">
+                  ✕ Close
+                </button>
                 {!selectedFile.isDirectory && (
                   <button 
                     onClick={() => handleDeleteFile(selectedFile.name, { stopPropagation: () => {} })}
                     className="delete-btn"
                   >
-                    Delete File
+                    🗑️ Delete
                   </button>
                 )}
               </div>
             </div>
-            <pre>{fileContent}</pre>
+            <div className="content-viewer">
+              <pre>{fileContent}</pre>
+            </div>
           </div>
         )}
+
         <div className="command-section">
-          <h2>Command Prompt</h2>
-          <input
-            type="text"
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleCommand()}
-            placeholder="e.g., create a new file called test.txt"
-          />
-          <button onClick={handleCommand}>Execute</button>
-          <button onClick={() => setPrompt('')} className="clear-btn">Clear</button>
+          <h2>🤖 Natural Language Commands</h2>
+          <div className="command-input">
+            <input
+              type="text"
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleCommand()}
+              placeholder="e.g., create a new file called test.txt with content 'Hello World'"
+              className="command-field"
+            />
+            <div className="command-actions">
+              <button onClick={handleCommand} className="execute-btn" disabled={loading || !prompt.trim()}>
+                🚀 Execute
+              </button>
+              <button onClick={() => setPrompt('')} className="clear-btn">
+                🗑️ Clear
+              </button>
+            </div>
+          </div>
+          <div className="command-examples">
+            <h4>💡 Example Commands:</h4>
+            <ul>
+              <li>"create a file called notes.txt"</li>
+              <li>"edit file.txt and add 'new content'"</li>
+              <li>"delete the file old.txt"</li>
+              <li>create a file called config.json with content {'{"key": "value"}'}</li>
+            </ul>
+          </div>
         </div>
       </main>
     </div>
