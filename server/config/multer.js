@@ -3,19 +3,16 @@ const path = require('path');
 const fs = require('fs');
 const config = require('./database');
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const dir = config.uploadsDir;
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    cb(null, dir);
-  },
-  filename: (req, file, cb) => {
-    cb(null, file.originalname);
-  },
-});
+// Use memory storage for Vercel deployment
+// Vercel's filesystem is read-only, so we need to handle files in memory
+const storage = multer.memoryStorage();
 
-const upload = multer({ storage });
+const upload = multer({ 
+  storage,
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB limit
+    files: 100 // Maximum 100 files
+  }
+});
 
 module.exports = upload; 
