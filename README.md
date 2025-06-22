@@ -139,7 +139,7 @@ The server exposes the following REST API endpoints:
 
 ## 🖼️ Screenshots
 
-*(Add screenshots of your application here)*
+![File Change Screenshot](./assets/screenshot.png)
 
 ## 📄 License
 
